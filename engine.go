@@ -17,6 +17,7 @@ var ValidFileExtensions = []string{".blade", ".tmpl", ".html", ".gohtml"}
 
 // Engine holds loaded files.
 type Engine struct {
+	dirPrefix      string
 	fs             fs.FS
 	debugTemplates map[string]string
 	templates      map[string]*template.Template
@@ -29,8 +30,14 @@ func NewEngine(dir string) *Engine {
 }
 
 // NewEngineFS creates a new engine pointing to a filesystem.
-func NewEngineFS(fs fs.FS) *Engine {
+// When using embed.Fs, pass the embedded folder as prefix.
+func NewEngineFS(fs fs.FS, prefix ...string) *Engine {
+	var dirPrefix string
+	if len(prefix) > 0 {
+		dirPrefix = prefix[0]
+	}
 	return &Engine{
+		dirPrefix:      dirPrefix,
 		fs:             fs,
 		debugTemplates: map[string]string{},
 		templates:      make(map[string]*template.Template),
@@ -186,8 +193,12 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 
 // nameFromPath converts a filesystem path to a template name, relative to engine dir.
 func (e *Engine) nameFromPath(path string) string {
+	rel, err := filepath.Rel(e.dirPrefix, path)
+	if err != nil {
+		return filepath.Base(path)
+	}
 	// normalize separators and drop extension
-	rel := filepath.ToSlash(path)
+	rel = filepath.ToSlash(rel)
 	rel = strings.TrimSuffix(rel, filepath.Ext(rel))
 	return normalizeName(rel)
 }
