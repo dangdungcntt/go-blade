@@ -1,11 +1,3 @@
-// Package bladish — a small Blade-like templating preprocessor for Go
-// Features:
-//  - @extends('base') to inherit a layout
-//  - @section('name') ... @endsection to define sections
-//  - @yield('name') to place sections in layout (supports default content)
-//  - @include('partial') to include other files
-// Usage: see example at the bottom (main function)
-
 package blade
 
 import (
