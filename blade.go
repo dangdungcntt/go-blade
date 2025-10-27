@@ -24,14 +24,10 @@ type Engine struct {
 
 // New creates a new engine pointing to a directory with files.
 func New(dir string) *Engine {
-	return &Engine{
-		fs:             os.DirFS(dir),
-		debugTemplates: map[string]string{},
-		templates:      make(map[string]*template.Template),
-	}
+	return NewFS(os.DirFS(dir))
 }
 
-// NewFS creates a new engine pointing to a directory with files.
+// NewFS creates a new engine pointing to a filesystem.
 func NewFS(fs fs.FS) *Engine {
 	return &Engine{
 		fs:             fs,
