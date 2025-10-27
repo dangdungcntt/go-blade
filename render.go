@@ -6,39 +6,39 @@ import (
 	"github.com/gin-gonic/gin/render"
 )
 
-type View interface {
+type View[T any] interface {
 	Name() string
-	Data() any
+	Data() T
 	Status() int
 }
 
-type view struct {
+type view[T any] struct {
 	name   string
-	data   any
+	data   T
 	status int
 }
 
-func NewView(name string, data any, status ...int) View {
+func NewView[T any](name string, data T, status ...int) View[T] {
 	statusCode := http.StatusOK
 	if len(status) > 0 {
 		statusCode = status[0]
 	}
-	return view{
+	return view[T]{
 		name:   name,
 		data:   data,
 		status: statusCode,
 	}
 }
 
-func (v view) Name() string {
+func (v view[T]) Name() string {
 	return v.name
 }
 
-func (v view) Data() any {
+func (v view[T]) Data() T {
 	return v.data
 }
 
-func (v view) Status() int {
+func (v view[T]) Status() int {
 	return v.status
 }
 
