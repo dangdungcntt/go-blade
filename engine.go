@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-var ValidFileExtensions = []string{".blade", ".tmpl", ".html"}
+var ValidFileExtensions = []string{".blade", ".tmpl", ".html", ".gohtml"}
 
 // Engine holds loaded files.
 type Engine struct {
