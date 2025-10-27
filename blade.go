@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,7 +17,7 @@ var validFileExts = []string{".blade", ".tmpl", ".html"}
 
 // Engine holds loaded files.
 type Engine struct {
-	dir            string
+	fs             fs.FS
 	debugTemplates map[string]string
 	templates      map[string]*template.Template
 }
@@ -24,7 +25,16 @@ type Engine struct {
 // New creates a new engine pointing to a directory with files.
 func New(dir string) *Engine {
 	return &Engine{
-		dir:            dir,
+		fs:             os.DirFS(dir),
+		debugTemplates: map[string]string{},
+		templates:      make(map[string]*template.Template),
+	}
+}
+
+// NewFS creates a new engine pointing to a directory with files.
+func NewFS(fs fs.FS) *Engine {
+	return &Engine{
+		fs:             fs,
 		debugTemplates: map[string]string{},
 		templates:      make(map[string]*template.Template),
 	}
@@ -33,7 +43,7 @@ func New(dir string) *Engine {
 // Load reads all files with .blade or .tmpl extension from directory (recursive).
 func (e *Engine) Load() error {
 	files := map[string]*ParsedFile{}
-	err := filepath.Walk(e.dir, func(path string, info os.FileInfo, err error) error {
+	err := fs.WalkDir(e.fs, ".", func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -45,15 +55,19 @@ func (e *Engine) Load() error {
 			return nil
 		}
 		name := e.nameFromPath(path)
-		raw, err := os.ReadFile(path)
+		f, err := e.fs.Open(path)
 		if err != nil {
 			return err
 		}
-		f, err := e.parseContent(string(raw))
+		raw, err := io.ReadAll(f)
 		if err != nil {
 			return err
 		}
-		files[name] = f
+		fileContent, err := e.parseContent(string(raw))
+		if err != nil {
+			return err
+		}
+		files[name] = fileContent
 		return nil
 	})
 	if err != nil {
@@ -83,12 +97,8 @@ func (e *Engine) Load() error {
 
 // nameFromPath converts filesystem path to template name, relative to engine dir.
 func (e *Engine) nameFromPath(path string) string {
-	rel, err := filepath.Rel(e.dir, path)
-	if err != nil {
-		return filepath.Base(path)
-	}
 	// normalize separators and drop extension
-	rel = filepath.ToSlash(rel)
+	rel := filepath.ToSlash(path)
 	rel = strings.TrimSuffix(rel, filepath.Ext(rel))
 	return normalizeName(rel)
 }
