@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+<head>
+  <title>@yield('title', 'Default Page Title')</title>
+</head>
+<body>
+  @include('partials/nav')
+  <main>
+    @yield('content')
+  </main>
+  <footer>@yield('footer')</footer>
+</body>
+</html>
