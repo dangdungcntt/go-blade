@@ -1,19 +1,32 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/dangdungcntt/go-blade"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	eng := blade.New("examples/views")
-	if err := eng.Load(); err != nil {
+	bladeEngine := blade.NewEngine("examples/views")
+	bladeEngine.FuncMap["hello"] = func(name string) string {
+		return "Hello " + name
+	}
+	if err := bladeEngine.Load(); err != nil {
 		panic(err)
 	}
-	data := map[string]interface{}{"Name": "John Doe"}
-	if err := eng.Render(os.Stdout, "pages/home", data); err != nil {
-		fmt.Println("render error:", err)
+
+	ginEngine := gin.Default()
+	ginEngine.HTMLRender = blade.NewHTMLRender(bladeEngine)
+
+	ginEngine.GET("/", func(c *gin.Context) {
+		data := map[string]any{"Name": "John Doe"}
+		c.HTML(200, "pages/home", data)
+	})
+	ginEngine.GET("/about", func(c *gin.Context) {
+		c.HTML(200, "pages/about", nil)
+	})
+
+	err := ginEngine.Run(":8080")
+	if err != nil {
+		panic(err)
 	}
 }

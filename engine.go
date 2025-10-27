@@ -13,26 +13,28 @@ import (
 	"strings"
 )
 
-var validFileExts = []string{".blade", ".tmpl", ".html"}
+var ValidFileExtensions = []string{".blade", ".tmpl", ".html"}
 
 // Engine holds loaded files.
 type Engine struct {
 	fs             fs.FS
 	debugTemplates map[string]string
 	templates      map[string]*template.Template
+	FuncMap        template.FuncMap
 }
 
-// New creates a new engine pointing to a directory with files.
-func New(dir string) *Engine {
-	return NewFS(os.DirFS(dir))
+// NewEngine creates a new engine pointing to a directory with files.
+func NewEngine(dir string) *Engine {
+	return NewEngineFS(os.DirFS(dir))
 }
 
-// NewFS creates a new engine pointing to a filesystem.
-func NewFS(fs fs.FS) *Engine {
+// NewEngineFS creates a new engine pointing to a filesystem.
+func NewEngineFS(fs fs.FS) *Engine {
 	return &Engine{
 		fs:             fs,
 		debugTemplates: map[string]string{},
 		templates:      make(map[string]*template.Template),
+		FuncMap:        template.FuncMap{},
 	}
 }
 
@@ -47,7 +49,7 @@ func (e *Engine) Load() error {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(path))
-		if !slices.Contains(validFileExts, ext) {
+		if !slices.Contains(ValidFileExtensions, ext) {
 			return nil
 		}
 		name := e.nameFromPath(path)
@@ -82,7 +84,7 @@ func (e *Engine) Load() error {
 		}
 		tmplText += e.buildDefaultYieldContent(ctx)
 		e.debugTemplates[name] = tmplText
-		e.templates[name], err = template.New(name).Parse(tmplText)
+		e.templates[name], err = template.New(name).Funcs(e.FuncMap).Parse(tmplText)
 		if err != nil {
 			return err
 		}
@@ -91,12 +93,19 @@ func (e *Engine) Load() error {
 	return nil
 }
 
-// nameFromPath converts filesystem path to template name, relative to engine dir.
-func (e *Engine) nameFromPath(path string) string {
-	// normalize separators and drop extension
-	rel := filepath.ToSlash(path)
-	rel = strings.TrimSuffix(rel, filepath.Ext(rel))
-	return normalizeName(rel)
+// Render executes the template identified by entry (e.g., "pages/home") into writer with data.
+func (e *Engine) Render(w io.Writer, entry string, data interface{}) error {
+	entry = normalizeName(entry)
+	tmpl, ok := e.templates[entry]
+	if !ok {
+		return fmt.Errorf("template %s not loaded", entry)
+	}
+	return tmpl.Execute(w, data)
+}
+
+// GetDebugTemplates returns a map of all loaded templates and their content.
+func (e *Engine) GetDebugTemplates() map[string]string {
+	return e.debugTemplates
 }
 
 var (
@@ -140,7 +149,6 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 		if endIdx == nil {
 			return nil, errors.New("missing @endsection")
 		}
-		// section content between start end
 		contentStart := loc[1]
 		contentEnd := loc[1] + endIdx[0]
 		content := rest[contentStart:contentEnd]
@@ -176,6 +184,15 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 	return p, nil
 }
 
+// nameFromPath converts a filesystem path to a template name, relative to engine dir.
+func (e *Engine) nameFromPath(path string) string {
+	// normalize separators and drop extension
+	rel := filepath.ToSlash(path)
+	rel = strings.TrimSuffix(rel, filepath.Ext(rel))
+	return normalizeName(rel)
+}
+
+// buildDefaultYieldContent builds default yield content for all unfilled yields.
 func (e *Engine) buildDefaultYieldContent(ctx *CompileContext) string {
 	var result string
 	for name, defaultValue := range ctx.Yields {
@@ -184,21 +201,6 @@ func (e *Engine) buildDefaultYieldContent(ctx *CompileContext) string {
 		}
 	}
 	return result
-}
-
-// Render executes the template identified by entry (e.g., "pages/home") into writer with data.
-func (e *Engine) Render(w io.Writer, entry string, data interface{}) error {
-	entry = normalizeName(entry)
-	tmpl, ok := e.templates[entry]
-	if !ok {
-		return fmt.Errorf("template %s not loaded", entry)
-	}
-	return tmpl.ExecuteTemplate(w, entry, data)
-}
-
-// GetDebugTemplates returns a map of all loaded templates and their content.
-func (e *Engine) GetDebugTemplates() map[string]string {
-	return e.debugTemplates
 }
 
 // normalizeName: remove quotes/spaces and extensions, normalize slashes

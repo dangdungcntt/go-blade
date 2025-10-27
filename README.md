@@ -16,6 +16,7 @@ It lets you use `@extends`, `@section`, `@yield`, and `@include` just like in Bl
 - Recursive layout inheritance (layout → page → partial)
 - Supports `.blade`, `.tmpl`, `.html` files
 - Automatic recursive loading of templates from a directory
+- Gin integration
 
 ## Installation
 

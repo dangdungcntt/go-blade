@@ -25,6 +25,7 @@ type ParsedFile struct {
 	StandaloneBody string
 }
 
+// ToTemplateString converts the parsed file to a template string.
 func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 	var result string
 	for name, s := range p.Sections {
