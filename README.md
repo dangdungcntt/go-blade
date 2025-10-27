@@ -17,8 +17,6 @@ It lets you use `@extends`, `@section`, `@yield`, and `@include` just like in Bl
 - Supports `.blade`, `.tmpl`, `.html` files
 - Automatic recursive loading of templates from a directory
 
----
-
 ## Installation
 
 ```bash
