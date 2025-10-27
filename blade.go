@@ -149,7 +149,6 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 		rest = rest[:loc[0]] + rest[contentEnd+len("@endsection"):] // remove tail including @endsection
 	}
 
-	// no extends — this is a base (layout) or standalone file
 	// convert @yield to template inclusion: @yield('name') => {{ template "name" . }}
 	converted := reYield.ReplaceAllStringFunc(rest, func(m string) string {
 		sm := reYield.FindStringSubmatch(m)
