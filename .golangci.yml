@@ -1,0 +1,50 @@
+version: "2"
+run:
+  concurrency: 4
+  issues-exit-code: 1
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bodyclose
+    - durationcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - gochecknoinits
+    - gocritic
+    - loggercheck
+    - mirror
+    - musttag
+    - prealloc
+    - reassign
+    - revive
+    - unconvert
+    - usestdlibvars
+    - whitespace
+    - funcorder
+    - decorder
+    - iface
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+    - swaggo
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

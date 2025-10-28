@@ -42,20 +42,20 @@ func (v view[T]) Status() int {
 	return v.status
 }
 
-var _ render.HTMLRender = (*HtmlRender)(nil)
+var _ render.HTMLRender = (*HTMLRender)(nil)
 
-// HtmlRender gin HtmlRender compatible
-type HtmlRender struct {
+// HTMLRender gin HTMLRender compatible
+type HTMLRender struct {
 	e *Engine
 }
 
-// NewHTMLRender create a new HtmlRender
-func NewHTMLRender(e *Engine) *HtmlRender {
-	return &HtmlRender{e: e}
+// NewHTMLRender create a new HTMLRender
+func NewHTMLRender(e *Engine) *HTMLRender {
+	return &HTMLRender{e: e}
 }
 
 // Instance returns a new render.Render
-func (h *HtmlRender) Instance(name string, data any) render.Render {
+func (h *HTMLRender) Instance(name string, data any) render.Render {
 	return &Render{e: h.e, name: name, data: data}
 }
 
