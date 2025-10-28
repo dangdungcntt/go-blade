@@ -23,6 +23,8 @@ type ParsedFile struct {
 	Yields map[string]string
 	// StandaloneBody is the body of the file without sections and includes
 	StandaloneBody string
+	// ParsedAt is the time when the file was parsed in unix milliseconds
+	ParsedAt int64
 }
 
 // ToTemplateString converts the parsed file to a template string.

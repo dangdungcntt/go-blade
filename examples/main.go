@@ -16,6 +16,18 @@ func main() {
 
 	ginEngine := gin.Default()
 	ginEngine.HTMLRender = blade.NewHTMLRender(bladeEngine)
+	ginEngine.Use(func(c *gin.Context) {
+		// For development, reload templates on each request.
+		err := bladeEngine.Load()
+		if err != nil {
+			c.Status(500)
+			c.String(500, err.Error())
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	})
 
 	ginEngine.GET("/", func(c *gin.Context) {
 		data := map[string]any{"Name": "John Doe"}

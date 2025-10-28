@@ -11,17 +11,22 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 )
 
 var ValidFileExtensions = []string{".blade", ".tmpl", ".html", ".gohtml"}
 
 // Engine holds loaded files.
 type Engine struct {
-	dirPrefix      string
-	fs             fs.FS
-	debugTemplates map[string]string
-	templates      map[string]*template.Template
-	FuncMap        template.FuncMap
+	dirPrefix       string
+	fs              fs.FS
+	parsedFiles     map[string]*ParsedFile
+	debugTemplates  map[string]string
+	templates       map[string]*template.Template
+	lastCompileTime int64
+	mu              sync.Mutex
+	FuncMap         template.FuncMap
 }
 
 // NewEngine creates a new engine pointing to a directory with files.
@@ -37,17 +42,27 @@ func NewEngineFS(fs fs.FS, prefix ...string) *Engine {
 		dirPrefix = prefix[0]
 	}
 	return &Engine{
-		dirPrefix:      dirPrefix,
-		fs:             fs,
-		debugTemplates: map[string]string{},
-		templates:      make(map[string]*template.Template),
-		FuncMap:        template.FuncMap{},
+		dirPrefix:       dirPrefix,
+		fs:              fs,
+		parsedFiles:     map[string]*ParsedFile{},
+		debugTemplates:  map[string]string{},
+		templates:       make(map[string]*template.Template),
+		lastCompileTime: -1,
+		FuncMap:         template.FuncMap{},
 	}
 }
 
-// Load reads all files with .blade or .tmpl extension from directory (recursive).
+// Load reads all files with .blade or .tmpl extension from the fs.
+// It will only recompile if the files have been modified since last compile.
 func (e *Engine) Load() error {
-	files := map[string]*ParsedFile{}
+	e.mu.Lock()
+	defer func() {
+		e.lastCompileTime = time.Now().UnixMilli()
+		e.mu.Unlock()
+	}()
+
+	needCompile := false
+
 	err := fs.WalkDir(e.fs, ".", func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -59,7 +74,18 @@ func (e *Engine) Load() error {
 		if !slices.Contains(ValidFileExtensions, ext) {
 			return nil
 		}
-		name := e.nameFromPath(path)
+
+		stats, err := info.Info()
+		if err != nil {
+			return err
+		}
+
+		if stats.ModTime().UnixMilli() <= e.lastCompileTime {
+			return nil
+		}
+
+		needCompile = true
+
 		f, err := e.fs.Open(path)
 		if err != nil {
 			return err
@@ -68,22 +94,29 @@ func (e *Engine) Load() error {
 		if err != nil {
 			return err
 		}
-		fileContent, err := e.parseContent(string(raw))
+		parsedFile, err := e.parseContent(string(raw))
 		if err != nil {
 			return err
 		}
-		files[name] = fileContent
+		name := e.nameFromPath(path)
+		e.parsedFiles[name] = parsedFile
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	for name, f := range files {
+	if !needCompile {
+		return nil
+	}
+
+	// TODO: compile only changed files and dependencies
+
+	for name, f := range e.parsedFiles {
 		ctx := &CompileContext{
 			FilledYields: map[string]struct{}{},
 			Yields:       map[string]string{},
-			Files:        files,
+			Files:        e.parsedFiles,
 		}
 		tmplText, err := f.ToTemplateString(ctx)
 		if err != nil {
@@ -129,6 +162,7 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 		Raw:      raw,
 		Sections: map[string]string{},
 		Yields:   map[string]string{},
+		ParsedAt: time.Now().UnixMilli(),
 	}
 	rest := raw
 
