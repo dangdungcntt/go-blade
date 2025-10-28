@@ -120,7 +120,7 @@ var (
 	reSectionStart = regexp.MustCompile(`@section\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`) // @section('content', 'value')
 	reSectionEnd   = regexp.MustCompile(`@endsection`)                                           // @endsection
 	reYield        = regexp.MustCompile(`@yield\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`)   // @yield('name', 'default')
-	reInclude      = regexp.MustCompile(`@include\(['"]([\w\-/. ]+)['"]\)`)
+	reInclude      = regexp.MustCompile(`@include\(['"]([\w\-/. ]+)['"](?:\s*,\s*([^)]+?))?\)`)
 )
 
 // parseContent parses Blade-like directives
@@ -180,8 +180,15 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 		sm := reInclude.FindStringSubmatch(m)
 		if len(sm) >= 2 {
 			name := normalizeName(sm[1])
+			pipeline := ""
+			if len(sm) >= 3 {
+				pipeline = strings.TrimSpace(sm[2])
+			}
+			if pipeline == "" {
+				pipeline = "."
+			}
 			p.Includes = append(p.Includes, name)
-			return fmt.Sprintf(`{{ template "%s" . }}`, name)
+			return fmt.Sprintf(`{{ template "%s" %s }}`, name, pipeline)
 		}
 		return m
 	})
