@@ -181,8 +181,8 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 	rest := raw
 
 	if loc := reExtend.FindStringSubmatchIndex(raw); loc != nil {
-		name := rest[loc[2]:loc[3]]
-		p.Extends = normalizeName(name)
+		parentName := rest[loc[2]:loc[3]]
+		p.Extends = normalizeName(parentName)
 		rest = rest[:loc[0]] + rest[loc[1]:]
 	}
 
@@ -204,6 +204,24 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 			stackName := normalizeName(sm[1])
 			p.Stacks[stackName] = struct{}{}
 			return fmt.Sprintf(`{{ template "%s%s" . }}`, stackNamePrefix, stackName)
+		}
+		return m
+	})
+
+	// process includes: @include('partial') -> {{ template "__include_partial" . }}
+	rest = reInclude.ReplaceAllStringFunc(rest, func(m string) string {
+		sm := reInclude.FindStringSubmatch(m)
+		if len(sm) >= 2 {
+			partialName := normalizeName(sm[1])
+			pipeline := ""
+			if len(sm) >= 3 {
+				pipeline = strings.TrimSpace(sm[2])
+			}
+			if pipeline == "" {
+				pipeline = "."
+			}
+			p.Includes = append(p.Includes, partialName)
+			return fmt.Sprintf(`{{ template "%s%s" %s }}`, partialNamePrefix, partialName, pipeline)
 		}
 		return m
 	})
@@ -254,25 +272,7 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 		rest = rest[:loc[0]] + rest[contentEnd+len("@endpush"):] // remove tail including @endpush
 	}
 
-	// process includes: @include('partial') -> {{ template "__include_partial" . }}
-	p.StandaloneBody = reInclude.ReplaceAllStringFunc(rest, func(m string) string {
-		sm := reInclude.FindStringSubmatch(m)
-		if len(sm) >= 2 {
-			partialName := normalizeName(sm[1])
-			pipeline := ""
-			if len(sm) >= 3 {
-				pipeline = strings.TrimSpace(sm[2])
-			}
-			if pipeline == "" {
-				pipeline = "."
-			}
-			p.Includes = append(p.Includes, partialName)
-			return fmt.Sprintf(`{{ template "%s%s" %s }}`, partialNamePrefix, partialName, pipeline)
-		}
-		return m
-	})
-
-	p.StandaloneBody = strings.TrimSpace(p.StandaloneBody)
+	p.StandaloneBody = strings.TrimSpace(rest)
 
 	return p, nil
 }

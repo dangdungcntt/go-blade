@@ -9,8 +9,8 @@ It lets you use `@extends`, `@section`, `@yield`, and `@include` just like in Bl
 - Familiar Blade-like syntax:
     - `@extends('layout')` - inherit layouts
     - `@section('name') ... @endsection` - define page sections
-    - `@section('name', 'default content')` - define page sections with default content
-    - `@yield('content', 'optinal default content')` - insert dynamic sections in layout
+    - `@section('name', 'content')` - define page sections with default content
+    - `@yield('section_name', 'optinal default content')` - insert dynamic sections in layout
     - `@include('partial', .OptionalData)` - include reusable fragments with optional data
     - `@stack('name')` - create a stack for dynamic push content
     - `@push('stack_name') ... @endpush` - push content to a stack
@@ -47,14 +47,14 @@ Home Page
 Becomes:
 
 ```gotemplate
-{{define "title"}}Home Page{{end}}
-{{define "content"}}<h1>Welcome {{.Name}}</h1>{{end}}
+{{define "__yield_title"}}Home Page{{end}}
+{{define "__yield_content"}}<h1>Welcome {{.Name}}</h1>{{end}}
 <html>
 <head>
-  <title>{{template "title"}}</title>
+  <title>{{ template "__yield_title" .}}</title>
 </head>
 <body>
-  {{template "content"}}
+  {{ template "__yield_content" . }}
 </body>
 </html>
 ```
@@ -72,7 +72,7 @@ import (
 )
 
 func main() {
-	eng := blade.New("views")
+	eng := blade.NewEngine("views")
 	if err := eng.Load(); err != nil {
 		panic(err)
 	}
@@ -82,6 +82,42 @@ func main() {
 	}
 }
 ```
+
+## Limitations
+
+Since go-blade is a preprocessor, it cannot handle conditional sections or push stacks. The following code will not work:
+
+```gotemplate
+<!--layout.gohtml-->
+<html>
+<body>
+@stack('content')
+</body>
+</html>
+```
+
+```gotemplate
+<!--page.gohtml-->
+@extends('layout')
+{{ if .Var }}
+@push('content')
+Content
+@endpush
+{{ end }}
+```
+
+Output:
+
+```gotemplate
+{{ define "__stack_content" }}Content{{ end }}
+<html>
+<body>
+{{ template "__stack_content" . }}
+</body>
+</html>
+```
+
+When a page extends a layout, only the content inside `@push`, `@section` will be rendered. 
 
 ## License
 
