@@ -44,13 +44,16 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 			return "", fmt.Errorf(`[%s] duplicate stack name "%s", already defined in file "%s"`, p.Name, name, fileName)
 		}
 		ctx.Stacks[name] = p.Name
-		result.WriteString("\n{{ define \"")
+		result.WriteString("{{ define \"")
 		result.WriteString(stackNamePrefix)
 		result.WriteString(name)
 		result.WriteString("\" }}")
 		// Pop from stack
 		size := len(ctx.PushStacks[name])
 		for i := range ctx.PushStacks[name] {
+			if i > 0 {
+				result.WriteString("\n")
+			}
 			result.WriteString(ctx.PushStacks[name][size-1-i])
 		}
 		result.WriteString("{{ end }}")
@@ -60,7 +63,7 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 		if _, ok := ctx.FilledYields[name]; ok {
 			continue
 		}
-		result.WriteString("\n{{ define \"")
+		result.WriteString("{{ define \"")
 		result.WriteString(yieldNamePrefix)
 		result.WriteString(name)
 		result.WriteString("\" }}")
@@ -80,7 +83,9 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 		}
 	}
 
-	if p.Extends != "" {
+	if p.Extends == "" {
+		result.WriteString(p.StandaloneBody)
+	} else {
 		parent, found := ctx.Files[p.Extends]
 		if !found {
 			return "", fmt.Errorf(`[%s] template "%s" not found to extends`, p.Name, p.Extends)
@@ -101,17 +106,12 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		result.WriteString("\n{{ define \"")
+		result.WriteString("{{ define \"")
 		result.WriteString(partialNamePrefix)
 		result.WriteString(partialName)
 		result.WriteString("\" }}")
 		result.WriteString(templateText)
 		result.WriteString("{{ end }}")
-	}
-
-	if p.Extends == "" {
-		result.WriteString("\n")
-		result.WriteString(p.StandaloneBody)
 	}
 
 	return result.String(), nil

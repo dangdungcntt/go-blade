@@ -229,8 +229,7 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 		}
 		contentStart := loc[1]
 		contentEnd := loc[1] + endIdx[0]
-		content := rest[contentStart:contentEnd]
-		p.Sections[sectionName] = content
+		p.Sections[sectionName] = strings.TrimSpace(rest[contentStart:contentEnd])
 		// remove the section from rest by replacing with empty string
 		rest = rest[:loc[0]] + rest[contentEnd+len("@endsection"):] // remove tail including @endsection
 	}
@@ -250,8 +249,7 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 		}
 		contentStart := loc[1]
 		contentEnd := loc[1] + endIdx[0]
-		content := rest[contentStart:contentEnd]
-		p.PushStacks[stackName] = append(p.PushStacks[stackName], content)
+		p.PushStacks[stackName] = append(p.PushStacks[stackName], strings.TrimSpace(rest[contentStart:contentEnd]))
 		// remove the section from rest by replacing with empty string
 		rest = rest[:loc[0]] + rest[contentEnd+len("@endpush"):] // remove tail including @endpush
 	}
