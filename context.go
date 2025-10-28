@@ -1,5 +1,11 @@
 package blade
 
+const (
+	yieldNamePrefix   = "__yield_"
+	stackNamePrefix   = "__stack_"
+	partialNamePrefix = "__partial_"
+)
+
 type CompileContext struct {
 	Files map[string]*ParsedFile
 	// Yields is a map of section names to default content

@@ -94,7 +94,7 @@ func (e *Engine) Load() error {
 			return err
 		}
 		name := e.nameFromPath(path)
-		parsedFile, err := e.parseContent(name, string(raw))
+		parsedFile, err := e.parseFile(name, string(raw))
 		if err != nil {
 			return err
 		}
@@ -167,8 +167,8 @@ var (
 	reInclude      = regexp.MustCompile(`@include\(['"]([\w\-/. ]+)['"](?:\s*,\s*([^)]+?))?\)`)  // @include('partial', .OtherData)
 )
 
-// parseContent parses Blade-like directives
-func (e *Engine) parseContent(name string, raw string) (*ParsedFile, error) {
+// parseFile parses Blade-like directives
+func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 	p := &ParsedFile{
 		Name:       name,
 		Raw:        raw,
@@ -190,9 +190,9 @@ func (e *Engine) parseContent(name string, raw string) (*ParsedFile, error) {
 	rest = reYield.ReplaceAllStringFunc(rest, func(m string) string {
 		sm := reYield.FindStringSubmatch(m)
 		if len(sm) >= 3 {
-			name := normalizeName(sm[1])
-			p.Yields[name] = sm[2]
-			return fmt.Sprintf(`{{ template "__yield_%s" . }}`, name)
+			yieldName := normalizeName(sm[1])
+			p.Yields[yieldName] = sm[2]
+			return fmt.Sprintf(`{{ template "%s%s" . }}`, yieldNamePrefix, yieldName)
 		}
 		return m
 	})
@@ -201,9 +201,9 @@ func (e *Engine) parseContent(name string, raw string) (*ParsedFile, error) {
 	rest = reStack.ReplaceAllStringFunc(rest, func(m string) string {
 		sm := reStack.FindStringSubmatch(m)
 		if len(sm) >= 2 {
-			name := normalizeName(sm[1])
-			p.Stacks[name] = struct{}{}
-			return fmt.Sprintf(`{{ template "__stack_%s" . }}`, name)
+			stackName := normalizeName(sm[1])
+			p.Stacks[stackName] = struct{}{}
+			return fmt.Sprintf(`{{ template "%s%s" . }}`, stackNamePrefix, stackName)
 		}
 		return m
 	})
@@ -269,7 +269,7 @@ func (e *Engine) parseContent(name string, raw string) (*ParsedFile, error) {
 				pipeline = "."
 			}
 			p.Includes = append(p.Includes, partialName)
-			return fmt.Sprintf(`{{ template "__include_%s" %s }}`, partialName, pipeline)
+			return fmt.Sprintf(`{{ template "%s%s" %s }}`, partialNamePrefix, partialName, pipeline)
 		}
 		return m
 	})
@@ -293,13 +293,19 @@ func (e *Engine) nameFromPath(path string) string {
 
 // buildDefaultYieldContent builds default yield content for all unfilled yields.
 func (e *Engine) buildDefaultYieldContent(ctx *CompileContext) string {
-	var result string
+	var result strings.Builder
 	for name, info := range ctx.Yields {
 		if _, ok := ctx.FilledYields[name]; !ok {
-			result += `{{ define "` + name + `" }}` + info.Default + `{{ end }}`
+			result.WriteString("\n")
+			result.WriteString("{{ define \"")
+			result.WriteString(yieldNamePrefix)
+			result.WriteString(name)
+			result.WriteString("\" }}")
+			result.WriteString(info.Default)
+			result.WriteString("{{ end }}")
 		}
 	}
-	return result
+	return result.String()
 }
 
 // normalizeName: remove quotes/spaces and extensions, normalize slashes

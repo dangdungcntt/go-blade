@@ -44,7 +44,8 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 			return "", fmt.Errorf(`[%s] duplicate stack name "%s", already defined in file "%s"`, p.Name, name, fileName)
 		}
 		ctx.Stacks[name] = p.Name
-		result.WriteString("\n{{ define \"__stack_")
+		result.WriteString("\n{{ define \"")
+		result.WriteString(stackNamePrefix)
 		result.WriteString(name)
 		result.WriteString("\" }}")
 		// Pop from stack
@@ -59,7 +60,8 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 		if _, ok := ctx.FilledYields[name]; ok {
 			continue
 		}
-		result.WriteString("\n{{ define \"__yield_")
+		result.WriteString("\n{{ define \"")
+		result.WriteString(yieldNamePrefix)
 		result.WriteString(name)
 		result.WriteString("\" }}")
 		result.WriteString(s)
@@ -99,7 +101,8 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		result.WriteString("\n{{ define \"__include_")
+		result.WriteString("\n{{ define \"")
+		result.WriteString(partialNamePrefix)
 		result.WriteString(partialName)
 		result.WriteString("\" }}")
 		result.WriteString(templateText)
