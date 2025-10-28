@@ -2,11 +2,30 @@
 
 @section('title', 'Home page')
 
-@section('content')
+@push('head')
+<style>
+.home {
+    color: red;
+}
+</style>
+@endpush
+@push('head')
+<script>
+console.log('Home page script from push stack 2');
+</script>
+@endpush
+
+@push('footer')
+<script>
+console.log('Home page footer script from push stack');
+</script>
+@endpush
+
+@push('content')
 <h1>{{ hello .Name }}</h1>
 <p>This is a Blade-like template in Go.</p>
-@endsection
+@endpush
 
-@section('footer')
+@push('footer')
 Home page Footer
-@endsection
+@endpush

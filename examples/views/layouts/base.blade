@@ -2,12 +2,13 @@
 <html>
 <head>
   <title>@yield('title', 'Default Page Title')</title>
+  @stack('head')
 </head>
 <body>
   @include('partials/nav')
   <main>
-    @yield('content')
+    @stack('content')
   </main>
-  <footer>@yield('footer')</footer>
+  <footer>@stack('footer')</footer>
 </body>
 </html>

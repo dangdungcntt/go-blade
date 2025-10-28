@@ -1,7 +1,6 @@
 package blade
 
 import (
-	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -94,11 +93,11 @@ func (e *Engine) Load() error {
 		if err != nil {
 			return err
 		}
-		parsedFile, err := e.parseContent(string(raw))
+		name := e.nameFromPath(path)
+		parsedFile, err := e.parseContent(name, string(raw))
 		if err != nil {
 			return err
 		}
-		name := e.nameFromPath(path)
 		e.parsedFiles[name] = parsedFile
 		return nil
 	})
@@ -114,14 +113,23 @@ func (e *Engine) Load() error {
 
 	for name, f := range e.parsedFiles {
 		ctx := &CompileContext{
-			FilledYields: map[string]struct{}{},
-			Yields:       map[string]string{},
 			Files:        e.parsedFiles,
+			Yields:       map[string]YieldInfo{},
+			FilledYields: map[string]struct{}{},
+			Stacks:       map[string]string{},
+			PushStacks:   map[string][]string{},
 		}
 		tmplText, err := f.ToTemplateString(ctx)
 		if err != nil {
 			return err
 		}
+
+		for stackName := range ctx.PushStacks {
+			if _, ok := ctx.Stacks[stackName]; !ok {
+				return fmt.Errorf(`[%s] missing stack "%s"`, f.Name, stackName)
+			}
+		}
+
 		tmplText += e.buildDefaultYieldContent(ctx)
 		e.debugTemplates[name] = tmplText
 		e.templates[name], err = template.New(name).Funcs(e.FuncMap).Parse(tmplText)
@@ -150,19 +158,25 @@ func (e *Engine) GetDebugTemplates() map[string]string {
 
 var (
 	reExtend       = regexp.MustCompile(`@extends\(['"]([\w\-/. ]+)['"]\)`)                      // allow slashes for dirs
+	reYield        = regexp.MustCompile(`@yield\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`)   // @yield('name', 'default')
 	reSectionStart = regexp.MustCompile(`@section\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`) // @section('content', 'value')
 	reSectionEnd   = regexp.MustCompile(`@endsection`)                                           // @endsection
-	reYield        = regexp.MustCompile(`@yield\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`)   // @yield('name', 'default')
-	reInclude      = regexp.MustCompile(`@include\(['"]([\w\-/. ]+)['"](?:\s*,\s*([^)]+?))?\)`)
+	reStack        = regexp.MustCompile(`@stack\(['"]([\w\-]+)['"]\)`)                           // @stack('name')
+	rePushStart    = regexp.MustCompile(`@push\(['"]([\w\-]+)['"]\)`)                            // @push('stack_name')
+	rePushEnd      = regexp.MustCompile(`@endpush`)                                              // @endpush
+	reInclude      = regexp.MustCompile(`@include\(['"]([\w\-/. ]+)['"](?:\s*,\s*([^)]+?))?\)`)  // @include('partial', .OtherData)
 )
 
 // parseContent parses Blade-like directives
-func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
+func (e *Engine) parseContent(name string, raw string) (*ParsedFile, error) {
 	p := &ParsedFile{
-		Raw:      raw,
-		Sections: map[string]string{},
-		Yields:   map[string]string{},
-		ParsedAt: time.Now().UnixMilli(),
+		Name:       name,
+		Raw:        raw,
+		Yields:     map[string]string{},
+		Sections:   map[string]string{},
+		Stacks:     map[string]struct{}{},
+		PushStacks: map[string][]string{},
+		ParsedAt:   time.Now().UnixMilli(),
 	}
 	rest := raw
 
@@ -172,6 +186,29 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 		rest = rest[:loc[0]] + rest[loc[1]:]
 	}
 
+	// convert @yield to template inclusion: @yield('name') => {{ template "__yield_name" . }}
+	rest = reYield.ReplaceAllStringFunc(rest, func(m string) string {
+		sm := reYield.FindStringSubmatch(m)
+		if len(sm) >= 3 {
+			name := normalizeName(sm[1])
+			p.Yields[name] = sm[2]
+			return fmt.Sprintf(`{{ template "__yield_%s" . }}`, name)
+		}
+		return m
+	})
+
+	// convert @stack to template inclusion: @stack('name') => {{ template "__stack_name" . }}
+	rest = reStack.ReplaceAllStringFunc(rest, func(m string) string {
+		sm := reStack.FindStringSubmatch(m)
+		if len(sm) >= 2 {
+			name := normalizeName(sm[1])
+			p.Stacks[name] = struct{}{}
+			return fmt.Sprintf(`{{ template "__stack_%s" . }}`, name)
+		}
+		return m
+	})
+
+	// Parse sections
 	for {
 		loc := reSectionStart.FindStringSubmatchIndex(rest)
 		if loc == nil {
@@ -188,7 +225,7 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 		// find end
 		endIdx := reSectionEnd.FindStringIndex(rest[loc[1]:])
 		if endIdx == nil {
-			return nil, errors.New("missing @endsection")
+			return nil, fmt.Errorf("[%s] missing @endsection", p.Name)
 		}
 		contentStart := loc[1]
 		contentEnd := loc[1] + endIdx[0]
@@ -198,22 +235,32 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 		rest = rest[:loc[0]] + rest[contentEnd+len("@endsection"):] // remove tail including @endsection
 	}
 
-	// convert @yield to template inclusion: @yield('name') => {{ template "name" . }}
-	converted := reYield.ReplaceAllStringFunc(rest, func(m string) string {
-		sm := reYield.FindStringSubmatch(m)
-		if len(sm) >= 3 {
-			name := normalizeName(sm[1])
-			p.Yields[name] = sm[2]
-			return fmt.Sprintf(`{{ template "%s" . }}`, name)
+	// Parse push stacks
+	for {
+		loc := rePushStart.FindStringSubmatchIndex(rest)
+		if loc == nil {
+			break
 		}
-		return m
-	})
+		// extract section name
+		stackName := rest[loc[2]:loc[3]] // matched name
+		// find end
+		endIdx := rePushEnd.FindStringIndex(rest[loc[1]:])
+		if endIdx == nil {
+			return nil, fmt.Errorf("[%s] missing @endpush", p.Name)
+		}
+		contentStart := loc[1]
+		contentEnd := loc[1] + endIdx[0]
+		content := rest[contentStart:contentEnd]
+		p.PushStacks[stackName] = append(p.PushStacks[stackName], content)
+		// remove the section from rest by replacing with empty string
+		rest = rest[:loc[0]] + rest[contentEnd+len("@endpush"):] // remove tail including @endpush
+	}
 
-	// process includes: @include('partial') -> {{ template "partial" . }}
-	p.StandaloneBody = reInclude.ReplaceAllStringFunc(converted, func(m string) string {
+	// process includes: @include('partial') -> {{ template "__include_partial" . }}
+	p.StandaloneBody = reInclude.ReplaceAllStringFunc(rest, func(m string) string {
 		sm := reInclude.FindStringSubmatch(m)
 		if len(sm) >= 2 {
-			name := normalizeName(sm[1])
+			partialName := normalizeName(sm[1])
 			pipeline := ""
 			if len(sm) >= 3 {
 				pipeline = strings.TrimSpace(sm[2])
@@ -221,8 +268,8 @@ func (e *Engine) parseContent(raw string) (*ParsedFile, error) {
 			if pipeline == "" {
 				pipeline = "."
 			}
-			p.Includes = append(p.Includes, name)
-			return fmt.Sprintf(`{{ template "%s" %s }}`, name, pipeline)
+			p.Includes = append(p.Includes, partialName)
+			return fmt.Sprintf(`{{ template "__include_%s" %s }}`, partialName, pipeline)
 		}
 		return m
 	})
@@ -247,9 +294,9 @@ func (e *Engine) nameFromPath(path string) string {
 // buildDefaultYieldContent builds default yield content for all unfilled yields.
 func (e *Engine) buildDefaultYieldContent(ctx *CompileContext) string {
 	var result string
-	for name, defaultValue := range ctx.Yields {
+	for name, info := range ctx.Yields {
 		if _, ok := ctx.FilledYields[name]; !ok {
-			result += `{{ define "` + name + `" }}` + defaultValue + `{{ end }}`
+			result += `{{ define "` + name + `" }}` + info.Default + `{{ end }}`
 		}
 	}
 	return result

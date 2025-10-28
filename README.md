@@ -11,10 +11,12 @@ It lets you use `@extends`, `@section`, `@yield`, and `@include` just like in Bl
     - `@section('name') ... @endsection` - define page sections
     - `@section('name', 'default content')` - define page sections with default content
     - `@yield('content', 'optinal default content')` - insert dynamic sections in layout
-    - `@include('partial')` - include reusable fragments
+    - `@include('partial', .OptionalData)` - include reusable fragments with optional data
+    - `@stack('name')` - create a stack for dynamic push content
+    - `@push('stack_name') ... @endpush` - push content to a stack
 - Powered by Go’s safe and fast `html/template`
 - Recursive layout inheritance (layout → page → partial)
-- Supports `.blade`, `.tmpl`, `.html` files
+- Default file extensions: `.gohtml`, `.blade`, `.tmpl`, `.html`
 - Automatic recursive loading of templates from a directory
 - Gin integration
 

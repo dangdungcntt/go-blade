@@ -1,5 +1,14 @@
 @extends('layouts/base')
 
-@section('footer')
-    Home layout Footer
-@endsection
+@push('head')
+    <style>
+        body {
+            background: #eee;
+        }
+    </style>
+@endpush
+@push('head')
+<script>
+console.log('Home layout script from push stack 2');
+</script>
+@endpush
