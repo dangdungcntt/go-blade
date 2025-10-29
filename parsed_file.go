@@ -12,7 +12,7 @@ type ParsedFile struct {
 	// Extends is the file to extend
 	Extends string
 	// Includes is a list of files to include
-	Includes []string
+	Includes map[string]struct{}
 	// Yields is a map of section names to default content
 	Yields map[string]string
 	// Sections is a map of section names to content
@@ -97,7 +97,7 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 		result.WriteString(templateText)
 	}
 
-	for _, partialName := range p.Includes {
+	for partialName := range p.Includes {
 		partial, found := ctx.Files[partialName]
 		if !found {
 			return "", fmt.Errorf(`[%s] template "%s" not found to include`, p.Name, partialName)

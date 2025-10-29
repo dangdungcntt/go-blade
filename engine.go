@@ -172,6 +172,7 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 	p := &ParsedFile{
 		Name:       name,
 		Raw:        raw,
+		Includes:   map[string]struct{}{},
 		Yields:     map[string]string{},
 		Sections:   map[string]string{},
 		Stacks:     map[string]struct{}{},
@@ -220,7 +221,7 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 			if pipeline == "" {
 				pipeline = "."
 			}
-			p.Includes = append(p.Includes, partialName)
+			p.Includes[partialName] = struct{}{}
 			return fmt.Sprintf(`{{ template "%s%s" %s }}`, partialNamePrefix, partialName, pipeline)
 		}
 		return m
