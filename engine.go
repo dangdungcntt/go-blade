@@ -113,13 +113,14 @@ func (e *Engine) Load() error {
 
 	for name, f := range e.parsedFiles {
 		ctx := &CompileContext{
-			Files:        e.parsedFiles,
-			Yields:       map[string]YieldInfo{},
-			FilledYields: map[string]struct{}{},
-			Stacks:       map[string]string{},
-			PushStacks:   map[string][]string{},
+			Files:          e.parsedFiles,
+			Yields:         map[string]YieldInfo{},
+			FilledSections: map[string]struct{}{},
+			FilledIncludes: map[string]struct{}{},
+			Stacks:         map[string]string{},
+			PushStacks:     map[string][]string{},
 		}
-		tmplText, err := f.ToTemplateString(ctx)
+		bodyText, defText, err := f.ToTemplateString(ctx)
 		if err != nil {
 			return err
 		}
@@ -130,10 +131,12 @@ func (e *Engine) Load() error {
 			}
 		}
 
-		tmplText += e.buildDefaultYieldContent(ctx)
+		defText += e.buildDefaultYieldContent(ctx)
+		tmplText := defText + bodyText
 		e.debugTemplates[name] = tmplText
 		e.templates[name], err = template.New(name).Funcs(e.FuncMap).Parse(tmplText)
 		if err != nil {
+			//TODO: parse template error to point to the debug template content
 			return err
 		}
 	}
@@ -187,13 +190,13 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 		rest = rest[:loc[0]] + rest[loc[1]:]
 	}
 
-	// convert @yield to template inclusion: @yield('name') => {{ template "__yield_name" . }}
+	// convert @yield to template inclusion: @yield('name') => {{ template "__section_name" . }}
 	rest = reYield.ReplaceAllStringFunc(rest, func(m string) string {
 		sm := reYield.FindStringSubmatch(m)
 		if len(sm) >= 3 {
 			yieldName := normalizeName(sm[1])
 			p.Yields[yieldName] = sm[2]
-			return fmt.Sprintf(`{{ template "%s%s" . }}`, yieldNamePrefix, yieldName)
+			return fmt.Sprintf(`{{ template "%s%s" . }}`, sectionNamePrefix, yieldName)
 		}
 		return m
 	})
@@ -294,10 +297,10 @@ func (e *Engine) nameFromPath(path string) string {
 func (e *Engine) buildDefaultYieldContent(ctx *CompileContext) string {
 	var result strings.Builder
 	for name, info := range ctx.Yields {
-		if _, ok := ctx.FilledYields[name]; !ok {
+		if _, ok := ctx.FilledSections[name]; !ok {
 			result.WriteString("\n")
 			result.WriteString("{{ define \"")
-			result.WriteString(yieldNamePrefix)
+			result.WriteString(sectionNamePrefix)
 			result.WriteString(name)
 			result.WriteString("\" }}")
 			result.WriteString(info.Default)

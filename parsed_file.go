@@ -28,8 +28,9 @@ type ParsedFile struct {
 }
 
 // ToTemplateString converts the parsed file to a template string.
-func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
-	var result strings.Builder
+func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (body string, def string, err error) {
+	var bodyBuilder strings.Builder
+	var defBuilder strings.Builder
 
 	for stackName, values := range p.PushStacks {
 		// We need push to stack in reverse order, since we are compiling from child to parent
@@ -41,40 +42,41 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 
 	for name := range p.Stacks {
 		if fileName, ok := ctx.Stacks[name]; ok {
-			return "", fmt.Errorf(`[%s] duplicate stack name "%s", already defined in file "%s"`, p.Name, name, fileName)
+			return "", "", fmt.Errorf(`[%s] duplicate stack name "%s", already defined in file "%s"`, p.Name, name, fileName)
 		}
 		ctx.Stacks[name] = p.Name
-		result.WriteString("{{ define \"")
-		result.WriteString(stackNamePrefix)
-		result.WriteString(name)
-		result.WriteString("\" }}")
+		defBuilder.WriteString("{{ define \"")
+		defBuilder.WriteString(stackNamePrefix)
+		defBuilder.WriteString(name)
+		defBuilder.WriteString("\" }}")
 		// Pop from stack
 		size := len(ctx.PushStacks[name])
 		for i := range ctx.PushStacks[name] {
 			if i > 0 {
-				result.WriteString("\n")
+				defBuilder.WriteString("\n")
 			}
-			result.WriteString(ctx.PushStacks[name][size-1-i])
+			defBuilder.WriteString(ctx.PushStacks[name][size-1-i])
 		}
-		result.WriteString("{{ end }}")
+		defBuilder.WriteString("{{ end }}")
 	}
 
 	for name, s := range p.Sections {
-		if _, ok := ctx.FilledYields[name]; ok {
+		if _, ok := ctx.FilledSections[name]; ok {
 			continue
 		}
-		result.WriteString("{{ define \"")
-		result.WriteString(yieldNamePrefix)
-		result.WriteString(name)
-		result.WriteString("\" }}")
-		result.WriteString(s)
-		result.WriteString("{{ end }}")
-		ctx.FilledYields[name] = struct{}{}
+		defBuilder.WriteString("{{ define \"")
+		defBuilder.WriteString(sectionNamePrefix)
+		defBuilder.WriteString(name)
+		defBuilder.WriteString("\" }}")
+		defBuilder.WriteString(s)
+		defBuilder.WriteString("{{ end }}")
+
+		ctx.FilledSections[name] = struct{}{}
 	}
 
 	for name, defaultValue := range p.Yields {
 		if info, ok := ctx.Yields[name]; ok {
-			return "", fmt.Errorf(`[%s] duplicate yield name "%s", already defined in file "%s"`, p.Name, name, info.FileName)
+			return "", "", fmt.Errorf(`[%s] duplicate yield name "%s", already defined in file "%s"`, p.Name, name, info.FileName)
 		}
 		ctx.Yields[name] = YieldInfo{
 			Name:     name,
@@ -84,35 +86,42 @@ func (p *ParsedFile) ToTemplateString(ctx *CompileContext) (string, error) {
 	}
 
 	if p.Extends == "" {
-		result.WriteString(p.StandaloneBody)
+		bodyBuilder.WriteString(p.StandaloneBody)
 	} else {
 		parent, found := ctx.Files[p.Extends]
 		if !found {
-			return "", fmt.Errorf(`[%s] template "%s" not found to extends`, p.Name, p.Extends)
+			return "", "", fmt.Errorf(`[%s] template "%s" not found to extends`, p.Name, p.Extends)
 		}
-		templateText, err := parent.ToTemplateString(ctx)
+		templateText, defText, err := parent.ToTemplateString(ctx)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		result.WriteString(templateText)
+		bodyBuilder.WriteString(templateText)
+		defBuilder.WriteString(defText)
 	}
 
 	for partialName := range p.Includes {
+		if _, ok := ctx.FilledIncludes[partialName]; ok {
+			continue
+		}
 		partial, found := ctx.Files[partialName]
 		if !found {
-			return "", fmt.Errorf(`[%s] template "%s" not found to include`, p.Name, partialName)
+			return "", "", fmt.Errorf(`[%s] template "%s" not found to include`, p.Name, partialName)
 		}
-		templateText, err := partial.ToTemplateString(ctx)
+		templateText, defText, err := partial.ToTemplateString(ctx)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		result.WriteString("{{ define \"")
-		result.WriteString(partialNamePrefix)
-		result.WriteString(partialName)
-		result.WriteString("\" }}")
-		result.WriteString(templateText)
-		result.WriteString("{{ end }}")
+		defBuilder.WriteString(defText)
+		defBuilder.WriteString("{{ define \"")
+		defBuilder.WriteString(partialNamePrefix)
+		defBuilder.WriteString(partialName)
+		defBuilder.WriteString("\" }}")
+		defBuilder.WriteString(templateText)
+		defBuilder.WriteString("{{ end }}")
+
+		ctx.FilledIncludes[partialName] = struct{}{}
 	}
 
-	return result.String(), nil
+	return bodyBuilder.String(), defBuilder.String(), nil
 }
