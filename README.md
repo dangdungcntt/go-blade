@@ -32,7 +32,7 @@ go-blade works as a **preprocessor** that converts Blade-like directives into st
 
 Example transformation:
 
-```gotemplate
+```html
 @extends('layouts/base')
 
 @section('title')
@@ -46,15 +46,15 @@ Home Page
 
 Becomes:
 
-```gotemplate
-{{define "__yield_title"}}Home Page{{end}}
-{{define "__yield_content"}}<h1>Welcome {{.Name}}</h1>{{end}}
+```html
+{{define "__section_title"}}Home Page{{end}}
+{{define "__section_content"}}<h1>Welcome {{.Name}}</h1>{{end}}
 <html>
 <head>
-  <title>{{ template "__yield_title" .}}</title>
+  <title>{{ template "__section_title" .}}</title>
 </head>
 <body>
-  {{ template "__yield_content" . }}
+  {{ template "__section_content" . }}
 </body>
 </html>
 ```
@@ -85,39 +85,72 @@ func main() {
 
 ## Limitations
 
-Since go-blade is a preprocessor, it cannot handle conditional sections or push stacks. The following code will not work:
+### 1. Conditional sections and push stacks
 
-```gotemplate
+Since go-blade is a preprocessor, it cannot handle conditional sections or push stacks.
+
+The following code will not work:
+
+```html
 <!--layout.gohtml-->
 <html>
-<body>
-@stack('content')
-</body>
+    <body>
+        @stack('content')
+    </body>
 </html>
 ```
-
-```gotemplate
+    
+```html
 <!--page.gohtml-->
 @extends('layout')
+
 {{ if .Var }}
-@push('content')
-Content
-@endpush
+    @push('content')
+        Content
+    @endpush
 {{ end }}
 ```
-
+    
 Output:
-
-```gotemplate
+    
+```html
 {{ define "__stack_content" }}Content{{ end }}
 <html>
-<body>
-{{ template "__stack_content" . }}
-</body>
+    <body>
+        {{ template "__stack_content" . }}
+    </body>
 </html>
 ```
 
-When a page extends a layout, only the content inside `@push`, `@section` will be rendered. 
+→ When a page extends a layout, only the content inside `@push` or `@section` directives will be rendered.
+
+### 2. `@include` with complex data
+
+For simplicity, go-blade only supports passing a simple expression (without parentheses) to a partial template.
+
+```html
+@include('partial', dict "Field" .OptionalData) // Works
+```
+
+To pass complex data to a partial template, use a `with` block:
+    
+```html
+{{ with slice .Items 0 (min (len .Items) 5) }}
+    @include('partial', dict "Items" .)
+{{ end }}
+```
+    
+### 3. Pass content as the second argument of `@section`
+
+Due to parsing limitations, the shorthand syntax `@section('name', ...)` only accepts a string as the second argument. 
+
+For more complex cases, use the full block form
+
+```html
+@section('name')
+...
+@endsection`
+``` 
 
 ## License
 
