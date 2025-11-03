@@ -136,7 +136,7 @@ func (e *Engine) Load() error {
 		e.debugTemplates[name] = tmplText
 		e.templates[name], err = template.New(name).Funcs(e.FuncMap).Parse(tmplText)
 		if err != nil {
-			//TODO: parse template error to point to the debug template content
+			// TODO: parse template error to point to the debug template content
 			return err
 		}
 	}
@@ -161,13 +161,13 @@ func (e *Engine) GetDebugTemplates() map[string]string {
 
 var (
 	reExtend       = regexp.MustCompile(`@extends\(['"]([\w\-/. ]+)['"]\)`)                      // allow slashes for dirs
-	reYield        = regexp.MustCompile(`@yield\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`)   // @yield('name', 'default')
-	reSectionStart = regexp.MustCompile(`@section\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`) // @section('content', 'value')
-	reSectionEnd   = regexp.MustCompile(`@endsection`)                                           // @endsection
-	reStack        = regexp.MustCompile(`@stack\(['"]([\w\-]+)['"]\)`)                           // @stack('name')
-	rePushStart    = regexp.MustCompile(`@push\(['"]([\w\-]+)['"]\)`)                            // @push('stack_name')
-	rePushEnd      = regexp.MustCompile(`@endpush`)                                              // @endpush
-	reInclude      = regexp.MustCompile(`@include\(['"]([\w\-/. ]+)['"](?:\s*,\s*([^)]+?))?\)`)  // @include('partial', .OtherData)
+	reYield        = regexp.MustCompile(`@yield\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`)   //	@yield('name',	'default')
+	reSectionStart = regexp.MustCompile(`@section\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`) //	@section('content',	'value')
+	reSectionEnd   = regexp.MustCompile(`@endsection`)                                           //	@endsection
+	reStack        = regexp.MustCompile(`@stack\(['"]([\w\-]+)['"]\)`)                           //	@stack('name')
+	rePushStart    = regexp.MustCompile(`@push\(['"]([\w\-]+)['"]\)`)                            //	@push('stack_name')
+	rePushEnd      = regexp.MustCompile(`@endpush`)                                              //	@endpush
+	reInclude      = regexp.MustCompile(`@include\(['"]([\w\-/. ]+)['"](?:\s*,\s*([^)]+?))?\)`)  //	@include('partial',	.OtherData)
 )
 
 // parseFile parses Blade-like directives
@@ -239,7 +239,7 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 		// extract section name
 		sectionName := rest[loc[2]:loc[3]] // matched name
 		if loc[5] > -1 {
-			// @section('name', 'content')
+			//	@section('name',	'content')
 			p.Sections[sectionName] = rest[loc[4]:loc[5]]
 			rest = rest[:loc[0]] + rest[loc[1]:]
 			continue
