@@ -7,14 +7,18 @@ linters:
     - asasalint
     - asciicheck
     - bodyclose
+    - decorder
     - durationcheck
     - errchkjson
     - errname
     - errorlint
+    - funcorder
     - gochecknoinits
     - gocritic
+    - iface
     - loggercheck
     - mirror
+    - modernize
     - musttag
     - prealloc
     - reassign
@@ -22,9 +26,6 @@ linters:
     - unconvert
     - usestdlibvars
     - whitespace
-    - funcorder
-    - decorder
-    - iface
   exclusions:
     generated: lax
     presets:

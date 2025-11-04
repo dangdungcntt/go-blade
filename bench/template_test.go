@@ -19,7 +19,7 @@ func makeLargeTemplate() string {
 	b.WriteString(`{{range $i, $it := .Items}}<li>{{template "row" (dict "Index" $i "Text" $it)}}</li>{{end}}`)
 	b.WriteString("\n</ul>\n")
 	// lặp thêm nhiều lần để tăng kích thước parse-tree
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		b.WriteString("\n<!-- block " + template.HTMLEscaper(i) + " -->")
 	}
 	return b.String()
@@ -28,8 +28,8 @@ func makeLargeTemplate() string {
 var (
 	tplSource = makeLargeTemplate()
 	funcs     = template.FuncMap{
-		"dict": func(v ...interface{}) map[string]interface{} {
-			dict := map[string]interface{}{}
+		"dict": func(v ...any) map[string]any {
+			dict := map[string]any{}
 			lenv := len(v)
 			for i := 0; i < lenv; i += 2 {
 				key := fmt.Sprint(v[i])

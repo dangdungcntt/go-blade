@@ -145,7 +145,7 @@ func (e *Engine) Load() error {
 }
 
 // Render executes the template identified by entry (e.g., "pages/home") into writer with data.
-func (e *Engine) Render(w io.Writer, entry string, data interface{}) error {
+func (e *Engine) Render(w io.Writer, entry string, data any) error {
 	entry = normalizeName(entry)
 	tmpl, ok := e.templates[entry]
 	if !ok {
