@@ -1,6 +1,8 @@
 package main
 
 import (
+	"html/template"
+
 	"github.com/dangdungcntt/go-blade"
 	"github.com/gin-gonic/gin"
 )
@@ -30,7 +32,13 @@ func main() {
 	})
 
 	ginEngine.GET("/", func(c *gin.Context) {
-		data := map[string]any{"Name": "John Doe"}
+		data := blade.NewDataWithFuncs(gin.H{
+			"Name": "John Doe",
+		}, template.FuncMap{
+			"hello": func(name string) string {
+				return "Hello " + name + " from override funcs"
+			},
+		})
 		c.HTML(200, "pages/home", data)
 	})
 	ginEngine.GET("/about", func(c *gin.Context) {

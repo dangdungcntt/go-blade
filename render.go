@@ -1,6 +1,8 @@
 package blade
 
 import (
+	"fmt"
+	"html/template"
 	"net/http"
 
 	"github.com/gin-gonic/gin/render"
@@ -59,6 +61,31 @@ func (h *HTMLRender) Instance(name string, data any) render.Render {
 	return &Render{e: h.e, name: name, data: data}
 }
 
+type DataWithFuncs interface {
+	Data() any
+	Funcs() template.FuncMap
+}
+
+type dataWithFuncs struct {
+	data  any
+	funcs template.FuncMap
+}
+
+func NewDataWithFuncs(data any, funcs template.FuncMap) DataWithFuncs {
+	return &dataWithFuncs{
+		data:  data,
+		funcs: funcs,
+	}
+}
+
+func (d *dataWithFuncs) Data() any {
+	return d.data
+}
+
+func (d *dataWithFuncs) Funcs() template.FuncMap {
+	return d.funcs
+}
+
 // Render renders HTML template with data and write to w
 type Render struct {
 	e    *Engine
@@ -69,7 +96,19 @@ type Render struct {
 // Render renders HTML template with data and writes to w
 func (r *Render) Render(w http.ResponseWriter) error {
 	r.WriteContentType(w)
-	return r.e.Render(w, r.name, r.data)
+	tmpl, ok := r.e.GetTemplate(r.name)
+	if !ok {
+		return fmt.Errorf("template %s not found", r.name)
+	}
+	if d, ok := r.data.(DataWithFuncs); ok {
+		cloneTmpl, err := tmpl.Clone()
+		if err != nil {
+			return err
+		}
+		return cloneTmpl.Funcs(d.Funcs()).Execute(w, d.Data())
+	}
+
+	return tmpl.Execute(w, r.data)
 }
 
 // WriteContentType write an HTML content type to the response header if not set

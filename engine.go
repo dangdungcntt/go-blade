@@ -144,14 +144,20 @@ func (e *Engine) Load() error {
 	return nil
 }
 
-// Render executes the template identified by entry (e.g., "pages/home") into writer with data.
+// Render executes the template identified by entry (e.g., "pages/home") into io.Writer with data.
 func (e *Engine) Render(w io.Writer, entry string, data any) error {
-	entry = normalizeName(entry)
-	tmpl, ok := e.templates[entry]
+	tmpl, ok := e.GetTemplate(entry)
 	if !ok {
 		return fmt.Errorf("template %s not loaded", entry)
 	}
 	return tmpl.Execute(w, data)
+}
+
+// GetTemplate returns the template identified by entry.
+func (e *Engine) GetTemplate(entry string) (*template.Template, bool) {
+	entry = normalizeName(entry)
+	tmpl, ok := e.templates[entry]
+	return tmpl, ok
 }
 
 // GetDebugTemplates returns a map of all loaded templates and their content.
