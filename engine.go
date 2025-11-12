@@ -14,18 +14,29 @@ import (
 	"time"
 )
 
-var ValidFileExtensions = []string{".blade", ".tmpl", ".html", ".gohtml"}
+var DefaultValidFileExtensions = []string{".blade", ".tmpl", ".html", ".gohtml"}
+
+// EntryFilter is a function that determines whether a parsed file should be available as a view
+type EntryFilter func(file *ParsedFile) bool
+
+// DefaultEntryFilter excludes files that start with an underscore or are in a directory that starts with an underscore
+var DefaultEntryFilter = func(file *ParsedFile) bool {
+	return !strings.HasPrefix(file.Name, "_") && strings.Contains(file.Name, "/_")
+}
 
 // Engine holds loaded files.
 type Engine struct {
-	dirPrefix       string
-	fs              fs.FS
-	parsedFiles     map[string]*ParsedFile
-	debugTemplates  map[string]string
-	templates       map[string]*template.Template
-	lastCompileTime int64
-	mu              sync.Mutex
-	FuncMap         template.FuncMap
+	dirPrefix              string
+	fs                     fs.FS
+	parsedFiles            map[string]*ParsedFile
+	debugTemplates         map[string]string
+	templates              map[string]*template.Template
+	lastCompileTime        int64
+	mu                     sync.Mutex
+	ValidFileExtensions    []string
+	FuncMap                template.FuncMap
+	EntryFilter            EntryFilter
+	IgnoreInvalidPushStack bool
 }
 
 // NewEngine creates a new engine pointing to a directory with files.
@@ -40,14 +51,21 @@ func NewEngineFS(fs fs.FS, prefix ...string) *Engine {
 	if len(prefix) > 0 {
 		dirPrefix = prefix[0]
 	}
+
+	validExts := make([]string, len(DefaultValidFileExtensions))
+	copy(validExts, DefaultValidFileExtensions)
+
 	return &Engine{
-		dirPrefix:       dirPrefix,
-		fs:              fs,
-		parsedFiles:     map[string]*ParsedFile{},
-		debugTemplates:  map[string]string{},
-		templates:       make(map[string]*template.Template),
-		lastCompileTime: -1,
-		FuncMap:         template.FuncMap{},
+		dirPrefix:              dirPrefix,
+		fs:                     fs,
+		parsedFiles:            map[string]*ParsedFile{},
+		debugTemplates:         map[string]string{},
+		templates:              make(map[string]*template.Template),
+		lastCompileTime:        -1,
+		ValidFileExtensions:    validExts,
+		FuncMap:                template.FuncMap{},
+		EntryFilter:            DefaultEntryFilter,
+		IgnoreInvalidPushStack: false,
 	}
 }
 
@@ -70,7 +88,7 @@ func (e *Engine) Load() error {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(path))
-		if !slices.Contains(ValidFileExtensions, ext) {
+		if !slices.Contains(e.ValidFileExtensions, ext) {
 			return nil
 		}
 
@@ -112,6 +130,9 @@ func (e *Engine) Load() error {
 	// TODO: compile only changed files and dependencies
 
 	for name, f := range e.parsedFiles {
+		if !e.EntryFilter(f) {
+			continue
+		}
 		ctx := &CompileContext{
 			Files:          e.parsedFiles,
 			Yields:         map[string]YieldInfo{},
@@ -125,9 +146,11 @@ func (e *Engine) Load() error {
 			return err
 		}
 
-		for stackName := range ctx.PushStacks {
-			if _, ok := ctx.Stacks[stackName]; !ok {
-				return fmt.Errorf(`[%s] missing stack "%s"`, f.Name, stackName)
+		if !e.IgnoreInvalidPushStack {
+			for stackName := range ctx.PushStacks {
+				if _, ok := ctx.Stacks[stackName]; !ok {
+					return fmt.Errorf(`[%s] missing stack "%s"`, f.Name, stackName)
+				}
 			}
 		}
 

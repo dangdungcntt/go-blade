@@ -44,6 +44,9 @@ func main() {
 	ginEngine.GET("/about", func(c *gin.Context) {
 		c.HTML(200, "pages/about", nil)
 	})
+	ginEngine.GET("/invalid", func(c *gin.Context) {
+		c.HTML(200, "_partials/nav", nil)
+	})
 
 	err := ginEngine.Run(":8080")
 	if err != nil {
