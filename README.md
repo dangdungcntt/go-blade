@@ -152,6 +152,12 @@ For more complex cases, use the full block form
 @endsection`
 ``` 
 
+### 4. Behavior of `@push` directive
+
+When compared with `Laravel Blade`, the `@push` directive in go-blade behaves similarly to `@pushOnce`.
+
+Due to preprocessing limitations, go-blade cannot handle `@push` directives inside partial templates that are included multiple times - the content will only be pushed to the stack once.
+
 ## License
 
 MIT © 2025
