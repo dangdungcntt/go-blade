@@ -21,7 +21,7 @@ type EntryFilter func(file *ParsedFile) bool
 
 // DefaultEntryFilter excludes files that start with an underscore or are in a directory that starts with an underscore
 var DefaultEntryFilter = func(file *ParsedFile) bool {
-	return !strings.HasPrefix(file.Name, "_") && strings.Contains(file.Name, "/_")
+	return !strings.HasPrefix(file.Name, "_") && !strings.Contains(file.Name, "/_")
 }
 
 // Engine holds loaded files.
@@ -343,8 +343,7 @@ func (e *Engine) buildDefaultYieldContent(ctx *CompileContext) string {
 func normalizeName(n string) string {
 	n = strings.TrimSpace(n)
 	n = strings.Trim(n, `"' `)
-	// remove ext if present
-	n = strings.TrimSuffix(n, filepath.Ext(n))
+	n = strings.ReplaceAll(n, ".", "/")
 	n = filepath.ToSlash(n)
 	return n
 }
