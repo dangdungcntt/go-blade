@@ -343,8 +343,7 @@ func (e *Engine) buildDefaultYieldContent(ctx *CompileContext) string {
 func normalizeName(n string) string {
 	n = strings.TrimSpace(n)
 	n = strings.Trim(n, `"' `)
-	// remove ext if present
-	n = strings.TrimSuffix(n, filepath.Ext(n))
+	n = strings.ReplaceAll(n, ".", "/")
 	n = filepath.ToSlash(n)
 	return n
 }
