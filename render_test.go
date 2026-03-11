@@ -99,8 +99,8 @@ func TestRender_WithFuncs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Refnder with funcs failed: %v", err)
 	}
-	if w.Body.String() != "UPPER" {
-		t.Errorf("Expected UPPER, got %s", w.Body.String())
+	if w.Body.String() != "TEST" {
+		t.Errorf("Expected TEST, got %s", w.Body.String())
 	}
 }
 

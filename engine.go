@@ -189,14 +189,12 @@ func (e *Engine) GetDebugTemplates() map[string]string {
 }
 
 var (
-	reExtend       = regexp.MustCompile(`@extends\(['"]([\w\-/. ]+)['"]\)`)                      // allow slashes for dirs
-	reYield        = regexp.MustCompile(`@yield\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`)   //	@yield('name',	'default')
-	reSectionStart = regexp.MustCompile(`@section\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`) //	@section('content',	'value')
-	reSectionEnd   = regexp.MustCompile(`@endsection`)                                           //	@endsection
-	reStack        = regexp.MustCompile(`@stack\(['"]([\w\-]+)['"]\)`)                           //	@stack('name')
-	rePushStart    = regexp.MustCompile(`@push\(['"]([\w\-]+)['"]\)`)                            //	@push('stack_name')
-	rePushEnd      = regexp.MustCompile(`@endpush`)                                              //	@endpush
-	reInclude      = regexp.MustCompile(`@include\(['"]([\w\-/. ]+)['"](?:\s*,\s*([^)]+?))?\)`)  //	@include('partial',	.OtherData)
+	reExtend     = regexp.MustCompile(`@extends\(['"]([\w\-/. ]+)['"]\)`)                    // allow slashes for dirs
+	reYield      = regexp.MustCompile(`@yield\(['"]([\w\-]+)['"](?:,\s*['"]([^)]*)['"])?\)`) //	@yield('name',	'default')
+	reSectionEnd = regexp.MustCompile(`@endsection`)                                         //	@endsection
+	reStack      = regexp.MustCompile(`@stack\(['"]([\w\-]+)['"]\)`)                         //	@stack('name')
+	rePushStart  = regexp.MustCompile(`@push\(['"]([\w\-]+)['"]\)`)                          //	@push('stack_name')
+	rePushEnd    = regexp.MustCompile(`@endpush`)                                            //	@endpush
 )
 
 // parseFile parses Blade-like directives
@@ -242,47 +240,64 @@ func (e *Engine) parseFile(name string, raw string) (*ParsedFile, error) {
 	})
 
 	// process includes: @include('partial') -> {{ template "__include_partial" . }}
-	rest = reInclude.ReplaceAllStringFunc(rest, func(m string) string {
-		sm := reInclude.FindStringSubmatch(m)
-		if len(sm) >= 2 {
-			partialName := normalizeName(sm[1])
-			pipeline := ""
-			if len(sm) >= 3 {
-				pipeline = strings.TrimSpace(sm[2])
-			}
+	rest = replaceDirectiveCalls(rest, "include", func(args []string) (string, bool) {
+		if len(args) == 0 {
+			return "", false
+		}
+		partialName, ok := parseQuotedDirectiveName(args[0])
+		if !ok {
+			return "", false
+		}
+		pipeline := "."
+		if len(args) > 1 {
+			pipeline = strings.TrimSpace(args[1])
 			if pipeline == "" {
 				pipeline = "."
 			}
-			p.Includes[partialName] = struct{}{}
-			return fmt.Sprintf(`{{ template "%s%s" %s }}`, partialNamePrefix, partialName, pipeline)
 		}
-		return m
+		p.Includes[partialName] = struct{}{}
+		return fmt.Sprintf(`{{ template "%s%s" %s }}`, partialNamePrefix, partialName, pipeline), true
 	})
 
 	// Parse sections
 	for {
-		loc := reSectionStart.FindStringSubmatchIndex(rest)
-		if loc == nil {
+		start := strings.Index(rest, "@section(")
+		if start == -1 {
 			break
 		}
-		// extract section name
-		sectionName := rest[loc[2]:loc[3]] // matched name
-		if loc[5] > -1 {
-			//	@section('name',	'content')
-			p.Sections[sectionName] = rest[loc[4]:loc[5]]
-			rest = rest[:loc[0]] + rest[loc[1]:]
+
+		callEnd, args, ok := parseDirectiveCall(rest, start, "section")
+		if !ok || len(args) == 0 {
+			start++
+			if start >= len(rest) {
+				break
+			}
+			rest = rest[:start] + rest[start:]
 			continue
 		}
+
+		sectionName, ok := parseQuotedDirectiveName(args[0])
+		if !ok {
+			continue
+		}
+
+		if len(args) > 1 {
+			//	@section('name',	content expression)
+			p.Sections[sectionName] = strings.TrimSpace(args[1])
+			rest = rest[:start] + rest[callEnd:]
+			continue
+		}
+
 		// find end
-		endIdx := reSectionEnd.FindStringIndex(rest[loc[1]:])
+		endIdx := reSectionEnd.FindStringIndex(rest[callEnd:])
 		if endIdx == nil {
 			return nil, fmt.Errorf("[%s] missing @endsection", p.Name)
 		}
-		contentStart := loc[1]
-		contentEnd := loc[1] + endIdx[0]
+		contentStart := callEnd
+		contentEnd := callEnd + endIdx[0]
 		p.Sections[sectionName] = strings.TrimSpace(rest[contentStart:contentEnd])
 		// remove the section from rest by replacing with empty string
-		rest = rest[:loc[0]] + rest[contentEnd+len("@endsection"):] // remove tail including @endsection
+		rest = rest[:start] + rest[contentEnd+len("@endsection"):] // remove tail including @endsection
 	}
 
 	// Parse push stacks
@@ -346,4 +361,166 @@ func normalizeName(n string) string {
 	n = strings.ReplaceAll(n, ".", "/")
 	n = filepath.ToSlash(n)
 	return n
+}
+
+func replaceDirectiveCalls(input string, directive string, replacer func(args []string) (string, bool)) string {
+	marker := "@" + directive + "("
+	var out strings.Builder
+	cursor := 0
+
+	for {
+		rel := strings.Index(input[cursor:], marker)
+		if rel == -1 {
+			out.WriteString(input[cursor:])
+			break
+		}
+
+		start := cursor + rel
+		out.WriteString(input[cursor:start])
+
+		end, args, ok := parseDirectiveCall(input, start, directive)
+		if !ok {
+			out.WriteString(input[start : start+1])
+			cursor = start + 1
+			continue
+		}
+
+		replacement, ok := replacer(args)
+		if !ok {
+			out.WriteString(input[start:end])
+		} else {
+			out.WriteString(replacement)
+		}
+		cursor = end
+	}
+
+	return out.String()
+}
+
+func parseDirectiveCall(input string, start int, directive string) (int, []string, bool) {
+	marker := "@" + directive + "("
+	if start < 0 || start >= len(input) || !strings.HasPrefix(input[start:], marker) {
+		return 0, nil, false
+	}
+
+	argStart := start + len(marker)
+	depth := 1
+	inSingle := false
+	inDouble := false
+	escaped := false
+
+	for i := argStart; i < len(input); i++ {
+		ch := input[i]
+
+		if escaped {
+			escaped = false
+			continue
+		}
+
+		if ch == '\\' && (inSingle || inDouble) {
+			escaped = true
+			continue
+		}
+
+		if ch == '\'' && !inDouble {
+			inSingle = !inSingle
+			continue
+		}
+		if ch == '"' && !inSingle {
+			inDouble = !inDouble
+			continue
+		}
+
+		if inSingle || inDouble {
+			continue
+		}
+
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				argsText := input[argStart:i]
+				return i + 1, splitTopLevelArgs(argsText), true
+			}
+		}
+	}
+
+	return 0, nil, false
+}
+
+func splitTopLevelArgs(argsText string) []string {
+	trimmed := strings.TrimSpace(argsText)
+	if trimmed == "" {
+		return nil
+	}
+
+	args := []string{}
+	start := 0
+	depth := 0
+	inSingle := false
+	inDouble := false
+	escaped := false
+
+	for i := 0; i < len(argsText); i++ {
+		ch := argsText[i]
+
+		if escaped {
+			escaped = false
+			continue
+		}
+
+		if ch == '\\' && (inSingle || inDouble) {
+			escaped = true
+			continue
+		}
+
+		if ch == '\'' && !inDouble {
+			inSingle = !inSingle
+			continue
+		}
+		if ch == '"' && !inSingle {
+			inDouble = !inDouble
+			continue
+		}
+
+		if inSingle || inDouble {
+			continue
+		}
+
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				arg := strings.TrimSpace(argsText[start:i])
+				if arg != "" {
+					args = append(args, arg)
+				}
+				start = i + 1
+			}
+		}
+	}
+
+	if arg := strings.TrimSpace(argsText[start:]); arg != "" {
+		args = append(args, arg)
+	}
+
+	return args
+}
+
+func parseQuotedDirectiveName(input string) (string, bool) {
+	trimmed := strings.TrimSpace(input)
+	if len(trimmed) < 2 {
+		return "", false
+	}
+	if (trimmed[0] != '\'' && trimmed[0] != '"') || trimmed[len(trimmed)-1] != trimmed[0] {
+		return "", false
+	}
+	return normalizeName(trimmed[1 : len(trimmed)-1]), true
 }
