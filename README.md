@@ -124,35 +124,7 @@ Output:
 
 → When a page extends a layout, only the content inside `@push` or `@section` directives will be rendered.
 
-### 2. `@include` with complex data
-
-For simplicity, go-blade only supports passing a simple expression (without parentheses) to a partial template.
-
-```html
-@include('partial', dict "Field" .OptionalData) // Works
-```
-
-To pass complex data to a partial template, use a `with` block:
-    
-```html
-{{ with slice .Items 0 (min (len .Items) 5) }}
-    @include('partial', dict "Items" .)
-{{ end }}
-```
-    
-### 3. Pass content as the second argument of `@section`
-
-Due to parsing limitations, the shorthand syntax `@section('name', ...)` only accepts a string as the second argument. 
-
-For more complex cases, use the full block form
-
-```html
-@section('name')
-...
-@endsection`
-``` 
-
-### 4. Behavior of `@push` directive
+### 2. Behavior of `@push` directive
 
 When compared with `Laravel Blade`, the `@push` directive in go-blade behaves similarly to `@pushOnce`.
 

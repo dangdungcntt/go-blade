@@ -125,6 +125,12 @@ func TestParseFile_Directives(t *testing.T) {
 			content:      `@include("partials.alert", "some data")`,
 			expectedBody: `{{ template "__partial_partials/alert" "some data" }}`,
 		},
+
+		{
+			name:         "Include with complex data",
+			content:      `@include("partials.alert", dict "Field" (print .Name "!") )`,
+			expectedBody: `{{ template "__partial_partials/alert" dict "Field" (print .Name "!") }}`,
+		},
 		{
 			name:    "Stack and Push",
 			content: `@push("scripts") <script>alert(1)</script> @endpush @stack("scripts")`,
@@ -299,4 +305,15 @@ func createMockFS(files map[string]string) fstest.MapFS {
 
 func normalizeSpace(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+func TestParseFile_SectionShorthandExpression(t *testing.T) {
+	engine := NewEngineFS(fstest.MapFS{})
+	parsed, err := engine.parseFile("test", `@section("title", print .Name "!")`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := parsed.Sections["title"]; got != `print .Name "!"` {
+		t.Fatalf("section shorthand mismatch, got %q", got)
+	}
 }
